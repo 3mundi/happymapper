@@ -406,6 +406,58 @@ describe HappyMapper do
     it "should map elements without a namespace" do
       mapping.alert.severity.should == 'Severe'
     end
+
+
   end
 
+  describe 'polymorphic nodes' do
+    before do
+      module Polymophic
+        class Messages
+          include HappyMapper
+
+          tag 'msg'
+          polymorphic :type
+
+          attribute :type, String, tag: 'msgType'
+        end
+
+        class SmsParser
+          include HappyMapper
+
+          tag 'msg'
+          element :phone, String
+          element :content, String
+        end
+
+        class EmailParser
+          include HappyMapper
+
+          tag 'msg'
+          element :address, String
+          element :subject, String
+          element :content, String
+        end
+      end
+    end
+    let(:contents) { Polymophic::Messages.parse(fixture_file('polymorphic.xml')) }
+
+    it 'should be polymorphic class type' do
+      contents[0].class.should == Polymophic::SmsParser
+      contents[1].class.should == Polymophic::EmailParser
+    end
+
+    it 'should be polymorphic' do
+      Polymophic::Messages.polymorphic?.should == true
+      Polymophic::EmailParser.polymorphic?.should == false
+    end
+
+    it 'should polymorphic_attribute == :type' do
+      Polymophic::Messages.polymorphic_attribute.should == :type
+    end
+
+    it 'should polymorphic_attribute == nil' do
+      Polymophic::EmailParser.polymorphic_attribute.should == nil
+    end
+  end
 end

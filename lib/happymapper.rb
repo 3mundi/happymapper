@@ -18,6 +18,31 @@ module HappyMapper
   end
 
   module ClassMethods
+    def polymorphic(attribute)
+      @polymorphic_attribute = attribute
+    end
+
+    def set_polymorphic_parser_sufix(sufix)
+      @polymorphic_parser_sufix = sufix
+    end
+
+    def polymorphic_parser_sufix
+      @polymorphic_parser_sufix || 'Parser'
+    end
+
+    def polymorphic_attribute
+      @polymorphic_attribute || nil
+    end
+
+    def polymorphic_attribute_value(xml, namespace)
+      attributes.select { |attr| attr.method_name.to_sym == :type }
+                .map { |attr| attr.from_xml_node(xml, namespace) }.first
+    end
+
+    def polymorphic?
+      !polymorphic_attribute.nil?
+    end
+
     def attribute(name, type, options={})
       attribute = Attribute.new(name, type, options)
       @attributes[to_s] ||= []
@@ -81,6 +106,22 @@ module HappyMapper
       @tag_name ||= to_s.split('::')[-1].downcase
     end
 
+    def constantize(type)
+      if type.is_a?(String)
+        names = "#{type}#{polymorphic_parser_sufix}".split('::')
+        constant = Object
+        names.each do |name|
+          constant =  constant.const_defined?(name) ?
+                        constant.const_get(name) :
+                        constant.const_missing(name)
+        end
+        constant
+      else
+        type
+      end
+    end
+    private :constantize
+
     def parse(xml, options = {})
       if xml.is_a?(XML::Node)
         node = xml
@@ -104,24 +145,31 @@ module HappyMapper
       end
 
       nodes = node.find(xpath, Array(namespace))
-      collection = nodes.collect do |n|
-        obj = new
-
-        attributes.each do |attr|
-          obj.send("#{attr.method_name}=",
-          attr.from_xml_node(n, namespace))
+      if polymorphic?
+        collection = nodes.collect do |n|
+          value = polymorphic_attribute_value(n, namespace)
+          constantize(value).parse(n.to_s, single: true)
         end
+      else
+        collection = nodes.collect do |n|
+          obj = new
 
-        elements.each do |elem|
-          obj.send("#{elem.method_name}=",
-          elem.from_xml_node(n, namespace))
+          attributes.each do |attr|
+            obj.send("#{attr.method_name}=",
+            attr.from_xml_node(n, namespace))
+          end
+
+          elements.each do |elem|
+            obj.send("#{elem.method_name}=",
+            elem.from_xml_node(n, namespace))
+          end
+
+          obj.send("#{@content}=", n.content) if @content
+
+          obj.class.after_parse_callbacks.each { |callback| callback.call(obj) }
+
+          obj
         end
-
-        obj.send("#{@content}=", n.content) if @content
-
-        obj.class.after_parse_callbacks.each { |callback| callback.call(obj) }
-
-        obj
       end
 
       # per http://libxml.rubyforge.org/rdoc/classes/LibXML/XML/Document.html#M000354

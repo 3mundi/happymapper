@@ -1,0 +1,12 @@
+<messages>
+  <msg msgType='Polymophic::Sms'>
+    <phone>333444555</phone>
+    <content>HEllo</content>
+  </msg>
+
+  <msg msgType='Polymophic::Email'>
+    <address>hello@foo.com</address>
+    <subject>Hi</subject>
+    <content>HEllo</content>
+  </msg>
+</messages>
