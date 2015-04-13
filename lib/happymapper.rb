@@ -1,4 +1,5 @@
 require 'rubygems'
+require 'active_support/concern'
 require 'date'
 require 'time'
 require 'xml'
@@ -6,19 +7,17 @@ require 'xml'
 class Boolean; end
 
 module HappyMapper
+  extend ActiveSupport::Concern
 
   DEFAULT_NS = "happymapper"
 
-  def self.included(base)
-    base.instance_variable_set("@attributes", {})
-    base.instance_variable_set("@elements", {})
-    base.instance_variable_set("@registered_namespaces", {})
-    
-    base.extend ClassMethods
+  included do
+    @attributes = {}
+    @elements = {}
+    @registered_namespaces = {}
   end
 
-  module ClassMethods
-    def polymorphic(attribute)
+  class_methods do
       @polymorphic_attribute = attribute
     end
 
