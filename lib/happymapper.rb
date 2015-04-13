@@ -1,5 +1,6 @@
 require 'rubygems'
 require 'active_support/concern'
+require 'active_support/inflector'
 require 'date'
 require 'time'
 require 'xml'
@@ -18,6 +19,16 @@ module HappyMapper
   end
 
   class_methods do
+    def polymorphic(attribute, options = {})
+      @classes_whitelist = []
+
+      if options[:class_namespace]
+        @parser_class_namespace = options[:class_namespace]
+      end
+      if options[:only]
+        @classes_whitelist = options[:only].map(&:to_s).map(&:camelize)
+      end
+
       @polymorphic_attribute = attribute
     end
 
@@ -105,16 +116,20 @@ module HappyMapper
       @tag_name ||= to_s.split('::')[-1].downcase
     end
 
+    def class_namespace
+      @class_namespace ||= begin
+        ancestor = ancestors.first.to_s.split('::')
+        ancestor.pop
+        ancestor.join('::')
+      end
+    end
+
     def constantize(type)
       if type.is_a?(String)
-        names = "#{type}#{polymorphic_parser_sufix}".split('::')
-        constant = Object
-        names.each do |name|
-          constant =  constant.const_defined?(name) ?
-                        constant.const_get(name) :
-                        constant.const_missing(name)
-        end
-        constant
+        constants = []
+        constants << class_namespace
+        constants << "#{type}#{polymorphic_parser_sufix}"
+        constants.join('::').constantize
       else
         type
       end
@@ -145,10 +160,16 @@ module HappyMapper
 
       nodes = node.find(xpath, Array(namespace))
       if polymorphic?
-        collection = nodes.collect do |n|
-          value = polymorphic_attribute_value(n, namespace)
-          constantize(value).parse(n.to_s, single: true)
-        end
+        collection = nodes.select do |n|
+                       value = polymorphic_attribute_value(n, namespace)
+                       @classes_whitelist.empty? ||
+                       @classes_whitelist.include?(value)
+                     end
+                     .collect do |n|
+                       value = polymorphic_attribute_value(n, namespace)
+                       constantize(value).parse(n.to_s, single: true)
+                     end
+
       else
         collection = nodes.collect do |n|
           obj = new
